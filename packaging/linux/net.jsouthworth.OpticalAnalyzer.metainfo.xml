@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>net.jsouthworth.OpticalAnalyzer</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>0BSD</project_license>
+  <name>Optical Analyzer</name>
+  <summary>Analyze spectacle lens optics, thickness, weight, materials, and frame traces</summary>
+  <developer id="net.jsouthworth">
+    <name>John Southworth</name>
+  </developer>
+  <launchable type="desktop-id">net.jsouthworth.OpticalAnalyzer.desktop</launchable>
+
+  <description>
+    <p>
+      Optical Analyzer is a desktop application for ophthalmic spectacle lens analysis, physical thickness and weight modeling, lens material recommendation, and front-view frame contour tracing.
+    </p>
+    <p>Key capabilities include:</p>
+    <ul>
+      <li>Dynamic Spectacle Magnification (DSM) plots for lateral chromatic aberration, binocular prismatic difference, and meridional magnification ellipses.</li>
+      <li>Conic sagitta thickness, 3D volume, and weight modeling across Bi-Aspheric, Aspheric, and Spherical designs with edging chamfer and eyewire bevel depth.</li>
+      <li>Multi-criteria lens material recommendations ranking 12 plastic and mineral glass materials by optical clarity, thickness, weight, cost, and regional availability.</li>
+      <li>Occlusion-aware frame photo tracing and standard OMA/VCA (.trc/.oma), JSON, and SVG frame contour support.</li>
+    </ul>
+  </description>
+
+  <url type="homepage">https://github.com/jsouthworth/optical-analyzer</url>
+  <url type="bugtracker">https://github.com/jsouthworth/optical-analyzer/issues</url>
+  <url type="vcs-browser">https://github.com/jsouthworth/optical-analyzer</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Optical Analyzer main window showing the live lens preview, optical summary, and thickness table</caption>
+      <image>https://raw.githubusercontent.com/jsouthworth/optical-analyzer/main/docs/screenshot.png</image>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>Science</category>
+    <category>Physics</category>
+  </categories>
+
+  <provides>
+    <binary>optical-analyzer</binary>
+    <binary>lens-thickness</binary>
+    <binary>lens-trace</binary>
+    <binary>chromatic-aberration</binary>
+    <binary>prismatic-difference</binary>
+    <binary>magnification-ellipse</binary>
+  </provides>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">940</display_length>
+  </requires>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="1.0.0" date="2026-11-23">
+      <description>
+        <p>First stable 1.0 release with finalized Go library APIs, validated JSON configuration and trace formats, and unified CLI tools.</p>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-11-22">
+      <description>
+        <p>Initial Flatpak packaging for Optical Analyzer and its companion CLI tools.</p>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-pure-go:
+    name: Vet & Test (Pure Go)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Vet pure-Go packages
+        run: >-
+          go vet
+          ./contour ./optics ./dsm ./lens ./tracer ./internal/...
+          ./cmd/lens-thickness ./cmd/lens-trace
+          ./cmd/chromatic-aberration ./cmd/prismatic-difference ./cmd/magnification-ellipse
+
+      - name: Test pure-Go packages
+        run: >-
+          go test -race -count=1
+          ./contour ./optics ./dsm ./lens ./tracer ./internal/...
+          ./cmd/lens-thickness ./cmd/lens-trace
+          ./cmd/chromatic-aberration ./cmd/prismatic-difference ./cmd/magnification-ellipse
+
+      - name: Build pure-Go CLIs
+        run: >-
+          go build
+          ./cmd/lens-thickness ./cmd/lens-trace
+          ./cmd/chromatic-aberration ./cmd/prismatic-difference ./cmd/magnification-ellipse

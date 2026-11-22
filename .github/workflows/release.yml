@@ -1,0 +1,269 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-flatpak:
+    name: Linux Flatpak (x86_64)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+      options: --privileged
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Go SDK extension
+        run: flatpak install --system -y --noninteractive flathub org.freedesktop.Sdk.Extension.golang//25.08
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/net.jsouthworth.OpticalAnalyzer.yml
+          bundle: optical-analyzer-linux-x86_64.flatpak
+          cache-key: flatpak-builder-${{ hashFiles('go.sum', 'packaging/flatpak/net.jsouthworth.OpticalAnalyzer.yml') }}
+
+  windows:
+    name: Windows (amd64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up MSYS2 UCRT64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-go
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkg-config
+            mingw-w64-ucrt-x86_64-qt6-base
+            zip
+
+      - name: Cache Go build and module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: windows-ucrt64-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            windows-ucrt64-go-
+
+      - name: Build GUI and CLI binaries
+        run: |
+          set -euo pipefail
+          export GOROOT=/ucrt64/lib/go
+          export CGO_ENABLED=1
+          pkg-config --modversion Qt6Widgets
+
+          stage="dist/optical-analyzer-windows-amd64"
+          mkdir -p "$stage"
+
+          # Embed application icon resource into optical-analyzer.exe
+          windres -I packaging/windows packaging/windows/optical-analyzer.rc -O coff -o cmd/optical-analyzer/rsrc_windows_amd64.syso
+          trap 'rm -f cmd/optical-analyzer/rsrc_windows_amd64.syso' EXIT
+
+          ver="1.0.0"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF#refs/tags/v}"
+          fi
+          ver_ld="-X jsouthworth.net/go/optical-analyzer/internal/version.Version=${ver}"
+
+          go build -ldflags "-s -w -H windowsgui ${ver_ld}" -o "$stage/optical-analyzer.exe" ./cmd/optical-analyzer
+          go build -ldflags "-s -w ${ver_ld}" -o "$stage/lens-thickness.exe" ./cmd/lens-thickness
+          go build -ldflags "-s -w ${ver_ld}" -o "$stage/lens-trace.exe" ./cmd/lens-trace
+          go build -ldflags "-s -w ${ver_ld}" -o "$stage/chromatic-aberration.exe" ./cmd/chromatic-aberration
+          go build -ldflags "-s -w ${ver_ld}" -o "$stage/prismatic-difference.exe" ./cmd/prismatic-difference
+          go build -ldflags "-s -w ${ver_ld}" -o "$stage/magnification-ellipse.exe" ./cmd/magnification-ellipse
+
+          windeployqt6 --no-translations "$stage/optical-analyzer.exe"
+
+          # Copy all transitive MSYS2 UCRT64 runtime DLLs needed by the GUI and Qt plugins
+          for _ in 1 2 3; do
+            added=0
+            while IFS= read -r dll; do
+              [ -n "$dll" ] || continue
+              base="$(basename "$dll")"
+              if [ ! -f "$stage/$base" ]; then
+                cp "$dll" "$stage/$base"
+                added=1
+              fi
+            done < <(find "$stage" \( -name '*.exe' -o -name '*.dll' \) -print0 | xargs -0 ldd 2>/dev/null | awk '/\/ucrt64\/bin\// {print $3}' | sort -u)
+            [ "$added" -eq 0 ] && break
+          done
+
+          cp LICENSE README.md "$stage/"
+          (cd dist && zip -rq ../optical-analyzer-windows-amd64.zip optical-analyzer-windows-amd64)
+
+      - name: Build Windows installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $version = "1.0.0"
+          if ($env:GITHUB_REF -like "refs/tags/v*") {
+            $version = $env:GITHUB_REF -replace '^refs/tags/v', ''
+          }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
+          if (-not $iscc) {
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc "/DAppVersion=$version" packaging\windows\optical-analyzer.iss
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: optical-analyzer-windows-amd64
+          path: |
+            optical-analyzer-windows-amd64.zip
+            optical-analyzer-windows-amd64-setup.exe
+
+  macos:
+    name: macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: amd64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Qt 6 and build tools via Homebrew
+        run: brew install pkg-config qtbase librsvg
+
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/go-build
+          key: macos-${{ matrix.arch }}-gobuild-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            macos-${{ matrix.arch }}-gobuild-
+
+      - name: Configure pkg-config for Qt 6
+        run: |
+          set -euo pipefail
+          QT_PREFIX="$(brew --prefix qtbase)"
+          PC_PATH="${QT_PREFIX}/lib/pkgconfig"
+
+          if ! PKG_CONFIG_PATH="${PC_PATH}" pkg-config --exists Qt6Widgets; then
+            mkdir -p "${RUNNER_TEMP}/pkgconfig"
+            QT_VER="$(${QT_PREFIX}/bin/qmake6 -query QT_VERSION)"
+            cat > "${RUNNER_TEMP}/pkgconfig/Qt6Widgets.pc" <<EOF
+          prefix=${QT_PREFIX}
+          libdir=\${prefix}/lib
+          includedir=\${prefix}/include
+
+          Name: Qt6 Widgets
+          Description: Qt Widgets module
+          Version: ${QT_VER}
+          Libs: -F\${libdir} -framework QtWidgets -framework QtGui -framework QtCore
+          Cflags: -F\${libdir} -I\${libdir}/QtWidgets.framework/Headers -I\${libdir}/QtGui.framework/Headers -I\${libdir}/QtCore.framework/Headers -I\${includedir}
+          EOF
+            PC_PATH="${RUNNER_TEMP}/pkgconfig:${PC_PATH}"
+          fi
+
+          echo "QT_PREFIX=${QT_PREFIX}" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=${PC_PATH}" >> "$GITHUB_ENV"
+          PKG_CONFIG_PATH="${PC_PATH}" pkg-config --modversion Qt6Widgets
+
+      - name: Build GUI (.app) and CLI binaries
+        run: |
+          set -euo pipefail
+          export CGO_ENABLED=1
+          export MACOSX_DEPLOYMENT_TARGET=15.0
+
+          stage="dist/optical-analyzer-macos-${{ matrix.arch }}"
+          app="${stage}/Optical Analyzer.app"
+          mkdir -p "${app}/Contents/MacOS" "${app}/Contents/Resources" "${stage}/cli"
+
+          ver="1.0.0"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF#refs/tags/v}"
+          fi
+          ver_ld="-X jsouthworth.net/go/optical-analyzer/internal/version.Version=${ver}"
+
+          go build -ldflags "-s -w ${ver_ld}" -o "${app}/Contents/MacOS/optical-analyzer" ./cmd/optical-analyzer
+          go build -ldflags "-s -w ${ver_ld}" -o "${stage}/cli/lens-thickness" ./cmd/lens-thickness
+          go build -ldflags "-s -w ${ver_ld}" -o "${stage}/cli/lens-trace" ./cmd/lens-trace
+          go build -ldflags "-s -w ${ver_ld}" -o "${stage}/cli/chromatic-aberration" ./cmd/chromatic-aberration
+          go build -ldflags "-s -w ${ver_ld}" -o "${stage}/cli/prismatic-difference" ./cmd/prismatic-difference
+          go build -ldflags "-s -w ${ver_ld}" -o "${stage}/cli/magnification-ellipse" ./cmd/magnification-ellipse
+
+          cp packaging/macos/Info.plist "${app}/Contents/Info.plist"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF#refs/tags/v}"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${ver}" "${app}/Contents/Info.plist"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${ver}" "${app}/Contents/Info.plist"
+          fi
+
+          # Convert SVG app icon to macOS .icns
+          iconset="${RUNNER_TEMP}/AppIcon.iconset"
+          mkdir -p "$iconset"
+          for size in 16 32 128 256 512; do
+            rsvg-convert -w "$size" -h "$size" packaging/linux/net.jsouthworth.OpticalAnalyzer.svg -o "$iconset/icon_${size}x${size}.png"
+            size2=$((size * 2))
+            rsvg-convert -w "$size2" -h "$size2" packaging/linux/net.jsouthworth.OpticalAnalyzer.svg -o "$iconset/icon_${size}x${size}@2x.png"
+          done
+          iconutil -c icns "$iconset" -o "${app}/Contents/Resources/AppIcon.icns"
+
+          # Bundle Qt 6 frameworks and Cocoa plugin inside the .app
+          "${QT_PREFIX}/bin/macdeployqt" "${app}"
+
+          # Re-apply ad-hoc code signatures after macdeployqt modifies bundle Mach-O paths
+          codesign --force --deep --sign - "${app}"
+          codesign --force --sign - "${stage}/cli/"*
+
+          cp LICENSE README.md "${stage}/"
+          # Preserve framework symlinks inside the .app bundle
+          (cd dist && zip -ryq "../optical-analyzer-macos-${{ matrix.arch }}.zip" "optical-analyzer-macos-${{ matrix.arch }}")
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: optical-analyzer-macos-${{ matrix.arch }}
+          path: optical-analyzer-macos-${{ matrix.arch }}.zip
+
+  release:
+    name: Publish GitHub Release
+    needs: [linux-flatpak, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*

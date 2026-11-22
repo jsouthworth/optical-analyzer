@@ -1,0 +1,45 @@
+id: net.jsouthworth.OpticalAnalyzer
+runtime: org.kde.Platform
+runtime-version: '6.10'
+sdk: org.kde.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.golang
+command: optical-analyzer
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # Allows .json/.dat configs to resolve referenced frame.trace (.trc/.oma) files cleanly.
+  # For strict portal-only Flathub submissions, remove this line and re-select traces via dialogs.
+  - --filesystem=home
+
+modules:
+  - name: optical-analyzer
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/golang/bin
+      env:
+        CGO_ENABLED: '1'
+        GOFLAGS: -mod=vendor
+        GOPROXY: 'off'
+    build-commands:
+      - go build -ldflags '-s -w -X jsouthworth.net/go/optical-analyzer/internal/version.Version=1.0.0' -o /app/bin/optical-analyzer ./cmd/optical-analyzer
+      - go build -ldflags '-s -w -X jsouthworth.net/go/optical-analyzer/internal/version.Version=1.0.0' -o /app/bin/lens-thickness ./cmd/lens-thickness
+      - go build -ldflags '-s -w -X jsouthworth.net/go/optical-analyzer/internal/version.Version=1.0.0' -o /app/bin/lens-trace ./cmd/lens-trace
+      - go build -ldflags '-s -w -X jsouthworth.net/go/optical-analyzer/internal/version.Version=1.0.0' -o /app/bin/chromatic-aberration ./cmd/chromatic-aberration
+      - go build -ldflags '-s -w -X jsouthworth.net/go/optical-analyzer/internal/version.Version=1.0.0' -o /app/bin/prismatic-difference ./cmd/prismatic-difference
+      - go build -ldflags '-s -w -X jsouthworth.net/go/optical-analyzer/internal/version.Version=1.0.0' -o /app/bin/magnification-ellipse ./cmd/magnification-ellipse
+      - install -Dm644 packaging/linux/net.jsouthworth.OpticalAnalyzer.desktop /app/share/applications/net.jsouthworth.OpticalAnalyzer.desktop
+      - install -Dm644 packaging/linux/net.jsouthworth.OpticalAnalyzer.metainfo.xml /app/share/metainfo/net.jsouthworth.OpticalAnalyzer.metainfo.xml
+      - install -Dm644 packaging/linux/net.jsouthworth.OpticalAnalyzer.svg /app/share/icons/hicolor/scalable/apps/net.jsouthworth.OpticalAnalyzer.svg
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - .flatpak-builder
+          - build-dir
+          - repo
+      - go.mod.yml

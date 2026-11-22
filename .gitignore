@@ -1,0 +1,28 @@
+# Compiled binaries
+/optical-analyzer
+/lens-thickness
+/lens-trace
+/chromatic-aberration
+/prismatic-difference
+/magnification-ellipse
+*.exe
+*.syso
+
+# Packaging & release artifacts
+/dist/
+/build-dir/
+/repo/
+/.flatpak-builder/
+*.flatpak
+*.zip
+
+# Test & coverage outputs
+*.test
+*.out
+coverage.html
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+*.swp
+*~

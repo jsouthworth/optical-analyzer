@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Optical Analyzer
+GenericName=Spectacle Lens Analyzer
+Comment=Ophthalmic spectacle lens optics, thickness modeling, material recommendation, and frame tracing
+Exec=optical-analyzer %f
+Icon=net.jsouthworth.OpticalAnalyzer
+Terminal=false
+Categories=Science;Physics;
+Keywords=optics;lens;ophthalmic;eyeglass;prescription;refraction;prism;dsm;oma;
+StartupNotify=true

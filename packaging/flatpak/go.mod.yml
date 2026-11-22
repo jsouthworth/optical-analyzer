@@ -1,0 +1,29 @@
+# Offline Go module sources for flatpak-builder (-mod=vendor).
+# Regenerate when go.mod/go.sum changes (e.g. via github.com/dennwc/flatpak-go-mod).
+- type: file
+  path: modules.txt
+  dest: vendor
+
+- type: archive
+  url: https://proxy.golang.org/github.com/fogleman/gg/@v/v1.3.0.zip
+  strip-components: 3
+  dest: vendor/github.com/fogleman/gg
+  sha256: 792f7a3ea9eea31b7947dabaf9d5a307389245069078e4bf435d76cb0505439c
+
+- type: archive
+  url: https://proxy.golang.org/github.com/golang/freetype/@v/v0.0.0-20170609003504-e2365dfdc4a0.zip
+  strip-components: 3
+  dest: vendor/github.com/golang/freetype
+  sha256: cdcb9e6a14933dcbf167b44dcd5083fc6a2e52c4fae8fb79747c691efeb7d84e
+
+- type: archive
+  url: https://proxy.golang.org/github.com/mappu/miqt/@v/v0.15.0.zip
+  strip-components: 3
+  dest: vendor/github.com/mappu/miqt
+  sha256: 16da8c8d29696d191e743de42f7e07cd1cfe3a0b062974064f31312143a38375
+
+- type: archive
+  url: https://proxy.golang.org/golang.org/x/image/@v/v0.9.0.zip
+  strip-components: 3
+  dest: vendor/golang.org/x/image
+  sha256: 896f9dbc6678447daac5d73ffb5bdd5132ef4154f99917bd186aaf4ba7e0ff51
